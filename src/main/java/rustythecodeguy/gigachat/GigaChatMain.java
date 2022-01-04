@@ -30,7 +30,7 @@ import org.spongepowered.api.text.serializer.TextSerializers;
         id = "gigachat",
         name = "GigaChat",
         description = "Simple chat manager /w LuckPerms support",
-        version = "0.1-BETA-MineReichBuild",
+        version = "0.1-BETA",
         authors = {
                 "RustyTheCodeguy"
         }
