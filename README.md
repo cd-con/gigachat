@@ -9,8 +9,8 @@ Simple and powerful chat plugin for SpongeForge.
 | Local/global chat   | ✅                        | Released               |
 | LuckPerms support   | ✅                        | Released               |
 | More permission plugin support     | 💡                         | In near future         |
-| Configuration file   | 🚧🏗️                     | Maybe tomorrow, idk          |
-| Custom event messages     | 💡                         | When cfg file support release        |
+| Configuration file   | ✅                     | Released           |
+| Custom event messages     | 🧪                         | Released         |
 
 - ✅ - Stable release
 - 🧪 - Unstable release (Experemental)
