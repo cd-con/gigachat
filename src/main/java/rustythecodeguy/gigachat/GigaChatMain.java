@@ -46,8 +46,10 @@ public class GigaChatMain {
     public AbstractMutableMessageChannel globalChannel;
 
     // Messages
+    public double minimumWordsInMessage = 1;
     public double localChatRadius = 32;
     public String whitelistMessage = "You're not whitelisted on this server";
+    public String shortMessageInGlobalChat = "";
     public String bassistMessage = "Nobody heard you!";
 
     // Chat formatting
@@ -99,30 +101,39 @@ public class GigaChatMain {
     }
 
     @Listener
-    public void onPlayerJoin(ClientConnectionEvent.Join event) {
+    public void onPlayer(ClientConnectionEvent.Auth event)
+    {
         // Thanks pearxteam for this code
         // Ported by me
         if (Sponge.getServer().hasWhitelist())
         {
             Optional<WhitelistService> wls = Sponge.getServiceManager().provide(WhitelistService.class);
-            if (wls.isPresent()) if (!wls.get().isWhitelisted(event.getTargetEntity().getProfile())) event.setMessage(applyOldMinecraftFormat(Text.of(whitelistMessage)));
-        }else {
-            Player player = event.getTargetEntity();
-            globalChannel.addMember(player);
-
-            if (!player.hasPlayedBefore()) {
-                AbstractMutableMessageChannel playerMessageChannel = new AbstractMutableMessageChannel() {
-                };
-
-                playerMessageChannel.clearMembers();
-                playerMessageChannel.addMember(player);
-
-                playerMessageChannel.send(Text.of(""));
-                playerMessageChannel.send(Text.builder("Hello, " + player.getName() + "!").color(TextColors.GOLD).build());
-                playerMessageChannel.send(Text.builder("Sending messages without '!' avaliable in radius of %chat_range% blocks").build());
-                playerMessageChannel.send(Text.builder("To use the global chat, write '!' at the beginning of the message").build());
-
+            if (wls.isPresent()) {
+                if (!wls.get().isWhitelisted(event.getProfile())) {
+                    event.setCancelled(true);
+                    event.setMessage(applyOldMinecraftFormat(Text.of(whitelistMessage)));
+                }
             }
+        }
+    }
+
+    @Listener
+    public void onPlayerJoin(ClientConnectionEvent.Join event) {
+        Player player = event.getTargetEntity();
+        globalChannel.addMember(player);
+
+        if (!player.hasPlayedBefore()) {
+            AbstractMutableMessageChannel playerMessageChannel = new AbstractMutableMessageChannel() {
+            };
+
+            playerMessageChannel.clearMembers();
+            playerMessageChannel.addMember(player);
+
+            playerMessageChannel.send(Text.of(""));
+            playerMessageChannel.send(Text.builder("Hello, " + player.getName() + "!").color(TextColors.GOLD).build());
+            playerMessageChannel.send(Text.builder("Sending messages without '!' avaliable in radius of %chat_range% blocks").build());
+            playerMessageChannel.send(Text.builder("To use the global chat, write '!' at the beginning of the message").build());
+
         }
     }
 
@@ -138,7 +149,6 @@ public class GigaChatMain {
     public void onChat(MessageChannelEvent.Chat event) {
         Optional<Player> optionalPlayer = event.getCause().first(Player.class);
         if(optionalPlayer.isPresent()) {
-            logger.debug("Yay, i've got a player!");
             // Get player, if available
             final Player player = optionalPlayer.get();
 
@@ -156,7 +166,7 @@ public class GigaChatMain {
             if (clearText.replace(" ", "").charAt(0) == globalChatSymbol)
             {
                 // Global chat code
-                if(clearText.length() > 1){
+                if(clearText.split(" ").length > minimumWordsInMessage){
                     // TODO YANDERE-DEV CODE DETECTED!!!!
                     if (useChatFormatting) {
                         globalChannel.send(applyOldMinecraftFormat(Text.of(TextColors.GREEN, "[G] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText.replaceFirst("!", ""))));
@@ -164,7 +174,7 @@ public class GigaChatMain {
                         globalChannel.send(applyOldMinecraftFormat(Text.of(TextColors.GREEN, "[G] ", TextColors.RESET, player.getName(), TextColors.RESET, ":", clearText.replaceFirst("!", ""))));
                     }
                 }else{
-                    player.sendMessage(Text.of(TextColors.RED, "Global chat message should be longer than nothing!"));
+                    player.sendMessage(applyOldMinecraftFormat(Text.of(shortMessageInGlobalChat.replace("%global_chat_min_message_length%", String.valueOf(minimumWordsInMessage)))));
                 }
             }
             else {
@@ -256,10 +266,12 @@ public class GigaChatMain {
         // Chat node
         localChatRadius = Double.parseDouble(cfg.getNode("chat", "localChatRadius").getString());
         globalChatSymbol = cfg.getNode("chat", "globalChatSymbol").getString().charAt(0);
+        minimumWordsInMessage = Double.parseDouble(cfg.getNode("chat", "minimumWordsInMessage").getString());
 
         // Custom messages node
         whitelistMessage = cfg.getNode("customMessages", "whitelistMessage").getString();
         bassistMessage = cfg.getNode("customMessages", "noPlayersNearMessage").getString();
+        shortMessageInGlobalChat = cfg.getNode("customMessages", "emptyGlobalChatMessage").getString();
     }
 
     private void reloadPermissionPlugin(short permissionPluginID) throws NullPointerException
