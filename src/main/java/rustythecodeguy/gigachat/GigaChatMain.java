@@ -1,11 +1,16 @@
 package rustythecodeguy.gigachat;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.model.user.User;
+import ninja.leaping.configurate.commented.CommentedConfigurationNode;
+import ninja.leaping.configurate.loader.ConfigurationLoader;
 import org.slf4j.Logger;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.config.DefaultConfig;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.EntityTypes;
 import org.spongepowered.api.entity.living.player.Player;
@@ -17,27 +22,47 @@ import org.spongepowered.api.event.message.MessageChannelEvent;
 import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.plugin.Plugin;
 import org.spongepowered.api.service.ProviderRegistration;
+import org.spongepowered.api.service.whitelist.WhitelistService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.AbstractMutableMessageChannel;
 import org.spongepowered.api.text.format.TextColors;
 import com.google.inject.Inject;
 import org.spongepowered.api.text.serializer.TextSerializers;
 
-// TODO add config support
 // TODO add more permission plugins support
 
 @Plugin(
         id = "gigachat",
         name = "GigaChat",
         description = "Simple chat manager /w LuckPerms support",
-        version = "0.1.2-BETA",
+        version = "0.2-BETA",
         authors = {
                 "RustyTheCodeguy"
         }
 )
 public class GigaChatMain {
+    private final info InfoClassInstance = new info();
+
     public AbstractMutableMessageChannel globalChannel;
-    public Optional<ProviderRegistration<LuckPerms>> permissionProvider_LuckPerms;
+
+    // Messages
+    public double localChatRadius = 32;
+    public String whitelistMessage = "You're not whitelisted on this server";
+    public String bassistMessage = "Nobody heard you!";
+
+    // Chat formatting
+    private Boolean useChatFormatting = false;
+    private Character globalChatSymbol;
+    private Optional<ProviderRegistration<LuckPerms>> permissionProvider_LuckPerms;
+
+
+    @Inject
+    @DefaultConfig(sharedRoot = true)
+    private ConfigurationLoader<CommentedConfigurationNode> configManager;
+    @Inject
+    @DefaultConfig(sharedRoot = true)
+    private File cfgPath;
+
     @Inject
     Logger logger;
 
@@ -48,29 +73,56 @@ public class GigaChatMain {
 
     @Listener
     public void onServerStart(GameStartedServerEvent event) {
-        logger.info("GigaChat by rusty.the.codeguy (cd-con) version 0.1");
-        logger.info("Local chat radius is set to 32 blocks");
-
+        logger.info("GigaChat by "+InfoClassInstance.getAuthors()+" version " + InfoClassInstance.getPluginVersion());
         globalChannel = new AbstractMutableMessageChannel(){};
-        permissionProvider_LuckPerms = Sponge.getGame().getServiceManager().getRegistration(LuckPerms.class);
+        logger.info("Registered global channel!");
+
+        // TODO Resolve this fucking error
+        //Sponge.getCommandManager().register(GigaChatMain.class,
+        //        CommandSpec.builder().permission("gigachat.command").child(
+        //                CommandSpec.builder().permission("gigachat.command.reload").executor(new ReloadConfigCommand(GigaChatMain.this)).build(), "reload", "reload-config").build(), "cwl");
+        try
+        {
+            reloadConfig();
+        }
+        catch (java.io.IOException e)
+        {
+            logger.error("An exception occurred while setting up plugin! Recheck the settings and run /gigachat reload!");
+            logger.error("Full error trace watch at debug.log");
+            logger.debug("Log trace\n"+e.getMessage());
+            logger.warn("Loading fallback settings due initialization error!");
+
+            // Fallback settings
+            globalChatSymbol = "!".charAt(0);
+        }
+        logger.info("Local chat radius is set to %chat_range% blocks".replace("%chat_range%", String.valueOf(localChatRadius)));
     }
 
     @Listener
     public void onPlayerJoin(ClientConnectionEvent.Join event) {
-        Player player = event.getTargetEntity();
-        globalChannel.addMember(player);
+        // Thanks pearxteam for this code
+        // Ported by me
+        if (Sponge.getServer().hasWhitelist())
+        {
+            Optional<WhitelistService> wls = Sponge.getServiceManager().provide(WhitelistService.class);
+            if (wls.isPresent()) if (!wls.get().isWhitelisted(event.getTargetEntity().getProfile())) event.setMessage(applyOldMinecraftFormat(Text.of(whitelistMessage)));
+        }else {
+            Player player = event.getTargetEntity();
+            globalChannel.addMember(player);
 
-        if(!player.hasPlayedBefore()) {
-            AbstractMutableMessageChannel playerMessageChannel = new AbstractMutableMessageChannel(){};
+            if (!player.hasPlayedBefore()) {
+                AbstractMutableMessageChannel playerMessageChannel = new AbstractMutableMessageChannel() {
+                };
 
-            playerMessageChannel.clearMembers();
-            playerMessageChannel.addMember(player);
+                playerMessageChannel.clearMembers();
+                playerMessageChannel.addMember(player);
 
-            playerMessageChannel.send(Text.of(""));
-            playerMessageChannel.send(Text.builder("Hello, " + player.getName() + "!").color(TextColors.GOLD).build());
-            playerMessageChannel.send(Text.builder("Sending messages without '!' avaliable in radius of 32 blocks").build());
-            playerMessageChannel.send(Text.builder("To use the global chat, write '!' at the beginning of the message").build());
+                playerMessageChannel.send(Text.of(""));
+                playerMessageChannel.send(Text.builder("Hello, " + player.getName() + "!").color(TextColors.GOLD).build());
+                playerMessageChannel.send(Text.builder("Sending messages without '!' avaliable in radius of %chat_range% blocks").build());
+                playerMessageChannel.send(Text.builder("To use the global chat, write '!' at the beginning of the message").build());
 
+            }
         }
     }
 
@@ -86,7 +138,8 @@ public class GigaChatMain {
     public void onChat(MessageChannelEvent.Chat event) {
         Optional<Player> optionalPlayer = event.getCause().first(Player.class);
         if(optionalPlayer.isPresent()) {
-            // Get player, if avaliable
+            logger.debug("Yay, i've got a player!");
+            // Get player, if available
             final Player player = optionalPlayer.get();
 
             // Create local channel and add event caller into it
@@ -100,19 +153,22 @@ public class GigaChatMain {
             String clearText = messageString.replace(player.getName(), "").replace("<","").replace(">", "");
 
             // Detect '!'
-            if (clearText.replace(" ", "").charAt(0) == "!".charAt(0))
+            if (clearText.replace(" ", "").charAt(0) == globalChatSymbol)
             {
                 // Global chat code
                 if(clearText.length() > 1){
-                    globalChannel.send(applyMinecraftFormat(Text.of(TextColors.GREEN, "[G] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText.replaceFirst("!", ""))));
+                    // TODO YANDERE-DEV CODE DETECTED!!!!
+                    if (useChatFormatting) {
+                        globalChannel.send(applyOldMinecraftFormat(Text.of(TextColors.GREEN, "[G] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText.replaceFirst("!", ""))));
+                    }else{
+                        globalChannel.send(applyOldMinecraftFormat(Text.of(TextColors.GREEN, "[G] ", TextColors.RESET, player.getName(), TextColors.RESET, ":", clearText.replaceFirst("!", ""))));
+                    }
                 }else{
                     player.sendMessage(Text.of(TextColors.RED, "Global chat message should be longer than nothing!"));
                 }
             }
             else {
                 // Local chat code
-                final double localChatRadius = 32;
-
                 //Get nearby players and add them in local channel
                 Collection<Entity> entities = player.getNearbyEntities(localChatRadius);
                 Iterator<Entity> iterator = entities.iterator();
@@ -127,11 +183,15 @@ public class GigaChatMain {
                 }
 
                 // Send message
-                localChannel.send(applyMinecraftFormat(Text.of(TextColors.YELLOW, "[L] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText)));
-
+                // TODO YANDERE-DEV CODE DETECTED
+                if (useChatFormatting) {
+                    localChannel.send(applyOldMinecraftFormat(Text.of(TextColors.YELLOW, "[L] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText)));
+                }else {
+                    localChannel.send(applyOldMinecraftFormat(Text.of(TextColors.YELLOW, "[L] ", TextColors.RESET, player.getName(), TextColors.RESET, ":", clearText)));
+                }
                 // Show message for player, if he was alone
                 if ((long) localChannel.getMembers().size() < 2){
-                    player.sendMessage(Text.of(TextColors.RED, "Nobody heard you"));
+                    player.sendMessage(applyOldMinecraftFormat(Text.of(bassistMessage)));
                 }
             }
             // Log chat event in logger
@@ -177,7 +237,53 @@ public class GigaChatMain {
         }
     }
 
-    private Text applyMinecraftFormat(Text text){
+    private Text applyOldMinecraftFormat(Text text){
         return Text.builder(TextSerializers.LEGACY_FORMATTING_CODE.serialize(text)).build();
+    }
+
+
+    // Config
+    public void reloadConfig() throws IOException
+    {
+        if (!cfgPath.exists() & Sponge.getAssetManager().getAsset(this, "gigachat.cfg").isPresent())
+        {
+            Sponge.getAssetManager().getAsset(this, "gigachat.cfg").get().copyToFile(cfgPath.toPath());
+        }
+        CommentedConfigurationNode cfg = configManager.load();
+        // Global node
+        reloadPermissionPlugin(Short.parseShort(cfg.getNode("global", "permissionPluginType").getString()));
+
+        // Chat node
+        localChatRadius = Double.parseDouble(cfg.getNode("chat", "localChatRadius").getString());
+        globalChatSymbol = cfg.getNode("chat", "globalChatSymbol").getString().charAt(0);
+
+        // Custom messages node
+        whitelistMessage = cfg.getNode("customMessages", "whitelistMessage").getString();
+        bassistMessage = cfg.getNode("customMessages", "noPlayersNearMessage").getString();
+    }
+
+    private void reloadPermissionPlugin(short permissionPluginID) throws NullPointerException
+    {
+        try{
+            switch (permissionPluginID){
+                case 0:
+                    // Permission-based formatting disabled
+                    useChatFormatting = false;
+                    break;
+
+                case 1:
+                    // LuckPerms formatting
+                    useChatFormatting = true;
+                    permissionProvider_LuckPerms = Sponge.getGame().getServiceManager().getRegistration(LuckPerms.class);
+                    break;
+
+                default:
+                    logger.error("Unable to reload permission plugin - permissionPluginType is incorrect!");
+                    useChatFormatting = false;
+
+            }
+        }catch (NullPointerException e){
+            logger.error("Unable to reload permission plugin!");
+        }
     }
 }
