@@ -28,7 +28,7 @@ public class ReloadConfigCommand implements CommandExecutor
         }
         catch (IOException e)
         {
-            throw new CommandException(Text.of("An exception occurred while reloading the CWL plugin!"), e);
+            throw new CommandException(Text.of("An exception occurred while reloading plugin!"), e);
         }
         return CommandResult.success();
     }
