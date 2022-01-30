@@ -28,23 +28,24 @@ import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.AbstractMutableMessageChannel;
 import org.spongepowered.api.text.format.TextColors;
 import com.google.inject.Inject;
-import org.spongepowered.api.text.serializer.TextSerializers;
 import org.spongepowered.api.service.permission.PermissionDescription;
 import org.spongepowered.api.service.permission.PermissionService;
+
+// Plugin files
 import rustythecodeguy.gigachat.commands.ReloadConfigCommand;
+import rustythecodeguy.gigachat.utils.classInstancer;
 
 @Plugin(
         id = "gigachat",
         name = "GigaChat",
         description = "Simple chat manager /w LuckPerms support",
-        version = "0.2-BETA",
+        version = "0.2.2",
         authors = {
                 "RustyTheCodeguy"
         }
 )
 public class GigaChatMain {
-    private final info InfoClassInstance = new info();
-
+    private final classInstancer Instance = new classInstancer();
     public AbstractMutableMessageChannel globalChannel;
 
     // Messages
@@ -53,8 +54,8 @@ public class GigaChatMain {
     public String whitelistMessage = "You're not whitelisted on this server";
     public String shortMessageInGlobalChat = "Your message is too short!";
     public String noPlayersInChannel = "Nobody heard you!";
-    public String joinMessage = "[+] %playername%";
-    public String leaveMessage = "[-] %playername%";
+    public String joinMessage = "[+] %player_name%";
+    public String leaveMessage = "[-] %player_name%";
 
     // Chat formatting
     private Boolean useChatFormatting = false;
@@ -79,7 +80,7 @@ public class GigaChatMain {
 
     @Listener
     public void onServerStart(GameStartedServerEvent event) {
-        logger.info("GigaChat by "+InfoClassInstance.getAuthors()+" version " + InfoClassInstance.getPluginVersion());
+        logger.info("GigaChat by "+Instance.InfoClassInstance.getAuthors()+" version " + Instance.InfoClassInstance.getPluginVersion());
         globalChannel = new AbstractMutableMessageChannel(){};
         logger.info("Registered global channel!");
 
@@ -125,7 +126,7 @@ public class GigaChatMain {
             if (wls.isPresent()) {
                 if (!wls.get().isWhitelisted(event.getProfile())) {
                     event.setCancelled(true);
-                    event.setMessage(applyOldMinecraftFormat(Text.of(whitelistMessage)));
+                    event.setMessage(Instance.utilClassInstance.applyOldMinecraftFormat(Text.of(whitelistMessage)));
                 }
             }
         }
@@ -137,31 +138,26 @@ public class GigaChatMain {
         globalChannel.addMember(player);
 
         // Replace event message
-        event.setMessage(applyOldMinecraftFormat(Text.of(joinMessage)));
+        event.setMessage(Instance.utilClassInstance.applyOldMinecraftFormat(Text.of(joinMessage.replace("%player_name%", player.getName()))));
 
         // Show plugin guide, if player playing for the first time
         if (!player.hasPlayedBefore()) {
-            AbstractMutableMessageChannel PMChannel = new AbstractMutableMessageChannel() {};
-
-            PMChannel.clearMembers();
-            PMChannel.addMember(player);
-
             // TODO add message to config
-            PMChannel.send(Text.of(""));
-            PMChannel.send(Text.builder("Hello, " + player.getName() + "!").color(TextColors.GOLD).build());
-            PMChannel.send(Text.builder("Sending messages without '!' avaliable in radius of %chat_range% blocks").build());
-            PMChannel.send(Text.builder("To use the global chat, write '!' at the beginning of the message").build());
+            sendPM(player, Text.of(""));
+            sendPM(player, Text.builder("Hello, " + player.getName() + "!").color(TextColors.GOLD).build());
+            sendPM(player, Text.builder("Sending messages without '!' avaliable in radius of %chat_range% blocks".replace("%chat_range%", Double.toString(localChatRadius))).build());
+            sendPM(player, Text.builder("To use the global chat, write '!' at the beginning of the message").build());
 
         }
     }
 
     @Listener
     public void onPlayerLeave(ClientConnectionEvent.Disconnect event) {
+        Player player = event.getTargetEntity();
         // Replace event message
-        event.setMessage(applyOldMinecraftFormat(Text.of(leaveMessage)));
+        event.setMessage(Instance.utilClassInstance.applyOldMinecraftFormat(Text.of(leaveMessage.replace("%player_name%", player.getName()))));
 
         // Remove player from global chat
-        Player player = event.getTargetEntity();
         logger.info("Player %player_name% left from server!".replace("%player_name%", player.getName()));
         globalChannel.removeMember(player);
     }
@@ -193,14 +189,13 @@ public class GigaChatMain {
             {
                 // Global chat code
                 if(clearText.split(" ").length > minimumWordsInMessage){
-                        globalChannel.send(applyOldMinecraftFormat(Text.of(TextColors.GREEN, "[G] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText.replaceFirst("!", ""))));
+                        globalChannel.send(Instance.utilClassInstance.applyOldMinecraftFormat(Text.of(TextColors.GREEN, "[G] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText.replaceFirst("!", ""))));
                 }else{
-                    player.sendMessage(applyOldMinecraftFormat(Text.of(shortMessageInGlobalChat.replace("%global_chat_min_message_length%", String.valueOf(minimumWordsInMessage)))));
+                    player.sendMessage(Instance.utilClassInstance.applyOldMinecraftFormat(Text.of(shortMessageInGlobalChat.replace("%global_chat_min_message_length%", String.valueOf(minimumWordsInMessage)))));
                 }
             }
             else {
                 // Local chat code
-
                 // Get nearby players and add them in local channel
                 Collection<Entity> entities = player.getNearbyEntities(localChatRadius);
                 Iterator<Entity> iterator = entities.iterator();
@@ -215,11 +210,11 @@ public class GigaChatMain {
                 }
 
                 // Send message
-                localChannel.send(applyOldMinecraftFormat(Text.of(TextColors.YELLOW, "[L] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText)));
+                localChannel.send(Instance.utilClassInstance.applyOldMinecraftFormat(Text.of(TextColors.YELLOW, "[L] ", getPrefix(player), TextColors.RESET, player.getName(), getSuffix(player), TextColors.RESET, ":", clearText)));
 
                 // Show message for player, if he was alone
                 if ((long) localChannel.getMembers().size() < 2){
-                    player.sendMessage(applyOldMinecraftFormat(Text.of(noPlayersInChannel)));
+                    player.sendMessage(Instance.utilClassInstance.applyOldMinecraftFormat(Text.of(noPlayersInChannel)));
                 }
             }
             // Log chat event in logger
@@ -279,17 +274,6 @@ public class GigaChatMain {
             }
             return suffix;
         }
-    }
-
-    /**
-     * Applies old Minecraft formatting
-     *
-     * @param text - Text builder object
-     * @return Text.builder()
-     */
-    @Deprecated
-    private Text applyOldMinecraftFormat(Text text){
-        return Text.builder(TextSerializers.LEGACY_FORMATTING_CODE.serialize(text)).build();
     }
 
 
@@ -352,5 +336,14 @@ public class GigaChatMain {
             logger.error("Unable to reload permission plugin! Chosen permission plugin (ID " + permissionPluginID + ") is not found");
             logger.warn("If you want learn more about this error, visit https://github.com/cd-con/gigachat/wiki");
         }
+    }
+
+    public void sendPM(Player player,Text text){
+        AbstractMutableMessageChannel PMChannel = new AbstractMutableMessageChannel() {};
+
+        PMChannel.clearMembers();
+        PMChannel.addMember(player);
+
+        PMChannel.send(text);
     }
 }
