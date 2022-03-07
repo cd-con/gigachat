@@ -2,6 +2,9 @@
 
 Simple and powerful chat plugin for SpongeForge.
 
+## Announcement!
+**Plugin creator (Bruhsty) forgot his password for account on Ore, so every future release will be published on GitHub.**
+
 ### Project status:
 
 | Type of components  | Current deployment status | Estimated release date  |
