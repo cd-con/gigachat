@@ -1,9 +1,11 @@
 # GigaChat
 
+# PLUGIN DEVELOPMENT TEMPORARILY FREEZED! PLEASE CHOOSE DIFFERENT SOLUTIONS FOR YOUR CHAT!
+
 Simple and powerful chat plugin for SpongeForge.
 
 ### Project status:
-
+### PLUGIN DEVELOPMENT TEMPORARILY FREEZED! PLEASE CHOOSE DIFFERENT SOLUTIONS FOR YOUR CHAT!
 | Type of components  | Current deployment status | Estimated release date  |
 |---------------------|----------------------------|------------------------|
 | Local/global chat   | ✅                        | Released               |
